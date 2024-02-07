@@ -151,18 +151,21 @@ g2p = G2p()
 from typing import Optional
 class SpeechRequest(BaseModel):
     input: str
-    voice: str = '8051'
-    prompt: Optional[str] = ''
+    voice: str = '92'
+    prompt: Optional[str] = '开心'
     language: Optional[str] = 'zh_us'
     model: Optional[str] = 'emoti-voice'
     response_format: Optional[str] = 'mp3'
     speed: Optional[float] = 1.0
+    volume: Optional[int] = 0
+    silent_last: Optional[int] = 0
 
 
 @app.post("/v1/audio/speech")
 def text_to_speech(speechRequest: SpeechRequest):
-
+    print('input {}'.format(speechRequest.input))
     text = g2p_cn_en(speechRequest.input, g2p, lexicon)
+    print('g2p_cn_en output {}'.format(text))
     np_audio = emotivoice_tts(text, speechRequest.prompt,
                               speechRequest.input, speechRequest.voice,
                               models)
@@ -172,13 +175,29 @@ def text_to_speech(speechRequest: SpeechRequest):
     wav_buffer = io.BytesIO()
     sf.write(file=wav_buffer, data=y_stretch,
              samplerate=config.sampling_rate, format='WAV')
-    buffer = wav_buffer
+    # buffer = wav_buffer
+    # response_format = speechRequest.response_format
+    # if response_format != 'wav':
+    #     wav_audio = AudioSegment.from_wav(wav_buffer)
+    #     wav_audio.frame_rate=config.sampling_rate
+    #     buffer = io.BytesIO()
+    #     wav_audio.export(buffer, format=response_format)
+    
+    # return Response(content=buffer.getvalue(),
+    #                 media_type=f"audio/{response_format}")
+    wav_audio = AudioSegment.from_wav(wav_buffer)
+    wav_audio.frame_rate=config.sampling_rate
+    # Adjust the volume
+    volume_value = speechRequest.volume
+    wav_audio = wav_audio + volume_value
+
+    if speechRequest.silent_last > 0 :      
+      silent_segment = AudioSegment.silent(duration=speechRequest.silent_last) 
+      wav_audio = wav_audio + silent_segment 
+    
     response_format = speechRequest.response_format
-    if response_format != 'wav':
-        wav_audio = AudioSegment.from_wav(wav_buffer)
-        wav_audio.frame_rate=config.sampling_rate
-        buffer = io.BytesIO()
-        wav_audio.export(buffer, format=response_format)
+    buffer = io.BytesIO()
+    wav_audio.export(buffer, format=response_format)
 
     return Response(content=buffer.getvalue(),
                     media_type=f"audio/{response_format}")
